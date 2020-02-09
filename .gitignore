@@ -1,0 +1,13 @@
+﻿#フォルダ
+.vs/
+Binaries/
+Intermediate/
+Saved/
+Library/
+obj/
+Package/
+
+
+#拡張子
+*.sln
+*.csproj
