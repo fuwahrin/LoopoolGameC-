@@ -7,6 +7,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/StaticMeshComponent.h"
 #include "LoopoolGameInstanceC.h"
+#include "Components/AudioComponent.h"
 
 // Sets default values
 ANeonPlayerPawnBase::ANeonPlayerPawnBase()
@@ -31,12 +32,15 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		ConstructorHelpers::FObjectFinderOptional<UStaticMesh>PoolBallNumber13;
 		ConstructorHelpers::FObjectFinderOptional<UStaticMesh>PoolBallNumber14;
 		ConstructorHelpers::FObjectFinderOptional<UStaticMesh>PoolBallNumber15;
-		ConstructorHelpers::FObjectFinderOptional<UStaticMesh> CueStick;
-		ConstructorHelpers::FObjectFinderOptional<UMaterialInstanceDynamic>NeonMat;
+		ConstructorHelpers::FObjectFinderOptional<UStaticMesh>CueStick;
+		ConstructorHelpers::FObjectFinderOptional<USoundBase>BallHitSound;
+		ConstructorHelpers::FObjectFinderOptional<USoundBase>BallShotSound;
+		ConstructorHelpers::FObjectFinderOptional<UMaterialInstanceDynamic>NeonMatEmissive;
+		ConstructorHelpers::FObjectFinderOptional<UMaterialInstanceDynamic>NeonMatGlass;
+		ConstructorHelpers::FObjectFinderOptional<UCurveFloat>MoveXCurve;
+		ConstructorHelpers::FObjectFinderOptional<UCurveFloat>TimeCurve;
 
-		//サウンド
-		ConstructorHelpers::FObjectFinderOptional<USoundBase> BallHitSound;
-		
+
 		
 		FConstructorStatics()
 			: PoolBall(TEXT("/Game/PoolTable/Mesh/Mesh_NeonBall_00.Mesh_NeonBall_00"))
@@ -57,7 +61,11 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 			, PoolBallNumber15(TEXT("/Game/PoolTable/Mesh/Mesh_NeonBall_15.Mesh_NeonBall_15"))
 			, CueStick(TEXT("/Game/PoolTable/Mesh/Mesh_Cuestick.Mesh_Cuestick"))
 			, BallHitSound(TEXT("/Game/Create/Audio/billiard-ball1.billiard-ball1"))
-			, NeonMat(TEXT("MaterialInstanceConstant'/Game/PoolTable/Material/Mat_NeonProps.Mat_NeonProps"))
+			, BallShotSound(TEXT("/Game/Create/Audio/billiard-shot1.billiard-shot1"))
+			, NeonMatEmissive(TEXT("/Game/PoolTable/Material/Mat_NeonProps.Mat_NeonProps"))
+			, NeonMatGlass(TEXT("/Game/PoolTable/Material/MI_PoolBall_Glass.MI_PoolBall_Glass"))
+			, MoveXCurve(TEXT("/Game/Create/BP/Curve/MoveXCurve.MoveXCurve"))
+			, TimeCurve(TEXT("/Game/Create/BP/Curve/TimeCurve.TimeCurve"))
 		{
 
 		}
@@ -192,10 +200,28 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 
 	//サウンド変数にサウンドをセットする。
 	_BallHitSound = ConstructorStatics.BallHitSound.Get();
+	_BallShotSound = ConstructorStatics.BallShotSound.Get();
 
 	//マテリアル変数の初期化
-	_NeonMat = ConstructorStatics.NeonMat.Get();
+	_NeonMatEmissive = ConstructorStatics.NeonMatEmissive.Get();
+	_NeonMatGlass = ConstructorStatics.NeonMatGlass.Get();
 
+	//タイムライン
+	_ShotTimeline = new FTimeline();
+	_ShotTimeline->SetTimelineLength(5.0f);
+
+	//タイムラインで使用するカーブ
+	_MoveXCurve = ConstructorStatics.MoveXCurve.Get();
+	_TimeCurve = ConstructorStatics.TimeCurve.Get();
+
+	//タイムライン更新時呼ばれる関数の設定（このクラスのTimelineUpdate）を呼ぶ
+	FOnTimelineFloat MyTimelineUpdate;
+	MyTimelineUpdate.BindUFunction(this, "TimelineUpdate");
+	_ShotTimeline->AddInterpFloat(_MoveXCurve, MyTimelineUpdate);
+	_ShotTimeline->AddInterpFloat(_TimeCurve, MyTimelineUpdate);
+
+
+	
 	//打つときの強さ関連の変数の初期化
 	//TODO:Input関連の処理を理解したらPlayerControllerに移動すること
 	_ImpluseValue = 100.0f;
@@ -210,7 +236,7 @@ void ANeonPlayerPawnBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	//各コンポーネントのコリジョン設定
+	
 
 }
 
@@ -219,6 +245,11 @@ void ANeonPlayerPawnBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	
+	if (_ShotTimeline != nullptr && _ShotTimeline->IsPlaying())
+	{
+		_ShotTimeline->TickTimeline(DeltaTime);
+	}
 }
 
 // Called to bind functionality to input
@@ -286,54 +317,226 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 
 void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
 {
-	//
-	if((OtherActor != nullptr) && (OtherComponent != nullptr))
-	{
-		if (OtherComponent->ComponentHasTag(StickTagName))
-		{
+	//インスタンスの取得
+	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
-		}
-		else if(OtherComponent->ComponentHasTag(BallTagName))
+	if (instance)
+	{
+		if ((OtherActor != nullptr) && (OtherComponent != nullptr))
 		{
-			_BallToHit = true;
-			
-			UGameplayStatics::SpawnSoundAtLocation(this, _BallHitSound, this->GetActorLocation());
+			if (OtherComponent->ComponentHasTag(StickTagName))
+			{
+				//打った強さ
+				FVector shotStrongIsWindow = Hit.ImpactNormal * instance->_shotImpluse * 25;
+				FVector shotStrongIsStandAlone = Hit.ImpactNormal * instance->_shotImpluse * 133;
+
+
+				//打った強さのベクトルの長さ
+				float Length = UKismetMathLibrary::Vector4_Size(shotStrongIsWindow);
+				
+				//スタンドアローン版と新規Windowで打つ強さに誤差が出たので調整を行う。
+				//打つ強さが最小値より上回っていれば新規Windowと判定
+				if (Length - 1.0f > _ImpluseMinValue)
+				{
+					//新規Windowで実行したときの処理
+
+					//打つ際の衝撃結果を変数に格納
+					_Impluse = FVector(shotStrongIsWindow.X, shotStrongIsStandAlone.Y, 0.0f);
+				}
+				else
+				{
+					//スタンドアローンで実行したときの処理
+					_Impluse = FVector(shotStrongIsStandAlone.X, shotStrongIsStandAlone.Y, 0.0f);
+				}
+				
+				//ボールに衝撃を与える
+				PoolBall->AddImpulse(_Impluse);
+
+				//ボールの衝撃音を再生
+				UAudioComponent *shotAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallShotSound, this->GetActorLocation());
+				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal * 1.5f);
+				shotAudio->SetVolumeMultiplier(volume);
+
+				//スティックを見えなくする。
+				CueStick->SetVisibility(false, false);
+				//スティックのコリジョンを消す
+				CueStick->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+
+
+
+			}
+			else if (OtherComponent->ComponentHasTag(BallTagName))
+			{
+				_BallToHit = true;
+				//ボールのHit音を再生
+				UAudioComponent *hitAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallHitSound, this->GetActorLocation());
+
+				//音量を変更する。
+				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal);
+				hitAudio->SetVolumeMultiplier(volume);
+
+			}
 		}
 	}
 
 }
 
+//打つボールに選択されたときに処理をまとめたメソッド
 void ANeonPlayerPawnBase::ActivePawn()
 {
-	PoolBall->CreateDynamicMaterialInstance(0, _NeonMat, "None");
+	//マテリアルインスタンスの変更
+	PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
+	//エミッシブカラーを強くして発光させる
+	PoolBall->SetScalarParameterValueOnMaterials("Emissive_Multiply", 10.0f);
 
+	//マテリアルインスタンスの変更
+	PoolBall->CreateDynamicMaterialInstance(1, _NeonMatGlass);
+	
+	//ガラス部分を半透明にする/
+	PoolBall->SetScalarParameterValueOnMaterials("Opacity", 0.5f);
 
+	//コリジョンのチャンネルを変更（スティックのみに当たり判定を有効にするため）
+	PoolBall->SetCollisionObjectType(ECollisionChannel::ECC_Pawn);
+
+	//スティックを見せる
+	CueStick->SetVisibility(true, false);
+
+	//スティックのコリジョンを有効にする。
+	CueStick->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	//矢印を表示する。
+	Arrow->SetVisibility(true, false);
 }
 
+//打つボールに選択されなかったときの処理をまとめたメソッド
 void ANeonPlayerPawnBase::NonActive()
 {
+	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
+	if (instance)
+	{
+		//マテリアルインスタンスの変更
+		PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
+		//発光をデフォルト値に戻す。
+		PoolBall->SetScalarParameterValueOnMaterials("Emissive_Multiply", 1.0f);
+
+		//マテリアルインスタンスの変更
+		PoolBall->CreateDynamicMaterialInstance(1, _NeonMatGlass);
+
+		//ガラス部分を透明にする/
+		PoolBall->SetScalarParameterValueOnMaterials("Opacity", 0.0f);
+
+		//コリジョンのチャンネルを変更（スティックとのあたり判定を無効にする。）
+		PoolBall->SetCollisionObjectType(ECollisionChannel::ECC_PhysicsBody);
+
+		//スティックを非表示
+		CueStick->SetVisibility(false, false);
+
+		//スティックのコリジョンを無効にする。
+		CueStick->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+		//打ち終わりにスティックの位置を元に戻す。
+		CueStick->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+
+		//打つ強さを初期化
+		instance->_shotImpluse = _ImpluseDefaultValue;
+
+		//矢印を表示する。
+		Arrow->SetVisibility(false, false);
+	}
 }
 
 void ANeonPlayerPawnBase::Shot()
 {
+	//GameInstance取得
+	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
+
+	if (instance)
+	{
+		instance->_shot = true;
+
+		//タイムラインをスタート
+		if (_ShotTimeline != nullptr)
+		{
+			_ShotTimeline->PlayFromStart();
+		}
+	}
 
 }
 
 void ANeonPlayerPawnBase::DrawLine()
 {
+	//GameInstance取得
+	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
+	if (instance)
+	{
+		//弾を打っているか
+		if (instance->_shot)
+		{
+			//弾を打ったらArrowコンポーネントを非表示
+			Arrow->SetVisibility(false, false);
+		}
+		else
+		{
+			//Arrowの長さを打つ強さの値によって変更する。（そのままの値では大きすぎるので2で割っている。）
+			float scaleX = instance->_shotImpluse / 2.0f;
+			Arrow->SetRelativeScale3D(FVector(scaleX, 1.0f, 1.0f));
+
+			//Arrowの色を変更
+
+			//Lerp補完のアルファ値（打つ強さを最小値と最大値の間で正規化）
+			float alpha = UKismetMathLibrary::NormalizeToRange(instance->_shotImpluse, _ImpluseMinValue, _ImpluseMaxValue);
+
+			//色を打つ強さによって変更する。
+			FLinearColor color = UKismetMathLibrary::LinearColorLerp(FLinearColor::Blue, FLinearColor::Red, alpha);
+			Arrow->SetArrowColor(color);
+
+		}
+	}
 }
 
+//プレイヤーのショットフラグとHitフラグを初期化
 void ANeonPlayerPawnBase::BLInit()
 {
+	//GameInstance取得
+	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
+	
+	if (instance)
+	{
+		instance->_shot = false;
+		_BallToHit = false;
+
+	}
 }
 
+//ボールの番号を見せる
 void ANeonPlayerPawnBase::ShowBallNum()
 {
+	//FlipFlop用のbool変数によって処理を分ける
+	if (_ShowBallNumFlip)
+	{
+		NumberText->SetVisibility(true, false);
+	}
+	else
+	{
+		NumberText->SetVisibility(false, false);
+
+	}
+	_ShowBallNumFlip = UKismetMathLibrary::Not_PreBool(_ShowBallNumFlip);
 
 }
+
+//タイムライン更新中に呼ばれるメソッド
+void ANeonPlayerPawnBase::TimelineUpdate(float MoveX, float Time)
+{
+	float X =UKismetMathLibrary::Lerp(0.0f, MoveX, Time);
+	CueStick->SetRelativeLocation(FVector(X, 0.0f, 0.0f));
+
+}
+
 
 
 

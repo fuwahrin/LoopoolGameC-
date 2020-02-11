@@ -8,6 +8,7 @@
 #include "Components/ArrowComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Sound/SoundBase.h"
+#include "Components/TimelineComponent.h"
 
 #include "NeonPlayerPawnBase.generated.h"
 
@@ -61,23 +62,31 @@ public:
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
 
 	//スティックを回転させるメソッド
+	UFUNCTION()
 	void AxisTurnRate(float AxisValue);
 
 	//打つ強さを決めるメソッド
+	UFUNCTION()
 	void AxisPowerRate(float AxisValue);
 
 	//カスタムイベントで作成していたメソッド
+	UFUNCTION()
 	void ActivePawn();
-
+	UFUNCTION()
 	void NonActive();
-
+	UFUNCTION()
 	void Shot();
-
+	UFUNCTION()
 	void DrawLine();
-
+	UFUNCTION()
 	void BLInit();
-
+	UFUNCTION()
 	void ShowBallNum();
+
+	//タイムライン更新時のメソッド
+	UFUNCTION()
+	void TimelineUpdate(float MoveX , float Time);
+
 
 
 
@@ -87,6 +96,9 @@ public:
 private:
 	const FName BallTagName = FName(TEXT("Ball"));
 	const FName StickTagName = FName(TEXT("Stick"));
+
+	//flipflop用のboolean
+	bool _ShowBallNumFlip = true;
 	
 
 public:
@@ -115,7 +127,21 @@ public:
 	USoundBase *_BallHitSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
-	UMaterialInstanceDynamic *_NeonMat;
+	USoundBase *_BallShotSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
+	UMaterialInstanceDynamic *_NeonMatEmissive;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
+	UMaterialInstanceDynamic *_NeonMatGlass;
+
+	FTimeline  *_ShotTimeline;
+
+	UCurveFloat *_MoveXCurve;
+	UCurveFloat *_TimeCurve;
+
+
+
 
 
 	//PlayerControllerにもたせていた変数
@@ -136,4 +162,5 @@ public:
 	//打つときのデフォルトの強さ
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
 	float _ImpluseDefaultValue;
+
 };
