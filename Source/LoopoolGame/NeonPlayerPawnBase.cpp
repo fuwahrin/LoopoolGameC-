@@ -5,6 +5,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetStringLibrary.h"
 #include "Components/StaticMeshComponent.h"
 #include "LoopoolGameInstanceC.h"
 #include "Components/AudioComponent.h"
@@ -35,8 +36,8 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		ConstructorHelpers::FObjectFinderOptional<UStaticMesh>CueStick;
 		ConstructorHelpers::FObjectFinderOptional<USoundBase>BallHitSound;
 		ConstructorHelpers::FObjectFinderOptional<USoundBase>BallShotSound;
-		ConstructorHelpers::FObjectFinderOptional<UMaterialInstanceDynamic>NeonMatEmissive;
-		ConstructorHelpers::FObjectFinderOptional<UMaterialInstanceDynamic>NeonMatGlass;
+		ConstructorHelpers::FObjectFinderOptional<UMaterialInterface>NeonMatEmissive;
+		ConstructorHelpers::FObjectFinderOptional<UMaterialInterface>NeonMatGlass;
 		ConstructorHelpers::FObjectFinderOptional<UCurveFloat>MoveXCurve;
 		ConstructorHelpers::FObjectFinderOptional<UCurveFloat>TimeCurve;
 
@@ -178,6 +179,8 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		//初期角度
 		FRotator Rot = FRotator(0.0f, -180.0f, 90.0f);
 		NumberText->SetRelativeRotation(FQuat(Rot));
+		//テキストを見えなくする。
+		NumberText->SetVisibility(false);
 
 	}
 
@@ -198,6 +201,8 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 	_RefBallMeshes.Add(ConstructorStatics.PoolBallNumber14.Get());
 	_RefBallMeshes.Add(ConstructorStatics.PoolBallNumber15.Get());
 
+	//弾の半径を設定
+	_BallRadius = 3.25f;
 	//サウンド変数にサウンドをセットする。
 	_BallHitSound = ConstructorStatics.BallHitSound.Get();
 	_BallShotSound = ConstructorStatics.BallShotSound.Get();
@@ -228,6 +233,48 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 	_ImpluseMaxValue = 5.0f;
 	_ImpluseMinValue = 1.0f;
 	_ImpluseDefaultValue = 3.0f;
+	
+	//メッシュ・マテリアル・テキストを設定
+	//メッシュの設定
+	PoolBall->SetStaticMesh(_RefBallMeshes[_BallNumber]);
+
+	//マテリアルインスタンスの変更
+	PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
+	//エミッシブカラーを強くして発光させる
+	PoolBall->SetScalarParameterValueOnMaterials("Emissive_Multiply", 10.0f);
+
+	//マテリアルインスタンスの変更
+	PoolBall->CreateDynamicMaterialInstance(1, _NeonMatGlass);
+
+	//ガラス部分を半透明にする/
+	PoolBall->SetScalarParameterValueOnMaterials("Opacity", 0.5f);
+
+	//テキストの設定
+	NumberText->SetText(UKismetStringLibrary::Conv_IntToString(_BallNumber));
+	//Init();
+	
+
+}
+
+//コンストラクションスクリプトの処理をまとめたメソッド
+void ANeonPlayerPawnBase::Init()
+{
+	//メッシュの設定
+	PoolBall->SetStaticMesh(_RefBallMeshes[_BallNumber]);
+
+	//マテリアルインスタンスの変更
+	PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
+	//エミッシブカラーを強くして発光させる
+	PoolBall->SetScalarParameterValueOnMaterials("Emissive_Multiply", 10.0f);
+
+	//マテリアルインスタンスの変更
+	PoolBall->CreateDynamicMaterialInstance(1, _NeonMatGlass);
+
+	//ガラス部分を半透明にする/
+	PoolBall->SetScalarParameterValueOnMaterials("Opacity", 0.5f);
+
+	//テキストの設定
+	NumberText->SetText(UKismetStringLibrary::Conv_IntToString(_BallNumber));
 
 }
 
@@ -525,6 +572,7 @@ void ANeonPlayerPawnBase::ShowBallNum()
 		NumberText->SetVisibility(false, false);
 
 	}
+	//フラグを反転
 	_ShowBallNumFlip = UKismetMathLibrary::Not_PreBool(_ShowBallNumFlip);
 
 }

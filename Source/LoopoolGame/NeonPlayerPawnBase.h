@@ -57,6 +57,11 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 public:
+
+	//コンストラクションスクリプトで行っていた処理
+	UFUNCTION()
+	void Init();
+
 	//あたり判定
 	UFUNCTION()
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
@@ -130,10 +135,10 @@ public:
 	USoundBase *_BallShotSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
-	UMaterialInstanceDynamic *_NeonMatEmissive;
+	UMaterialInterface *_NeonMatEmissive;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
-	UMaterialInstanceDynamic *_NeonMatGlass;
+	UMaterialInterface *_NeonMatGlass;
 
 	FTimeline  *_ShotTimeline;
 
