@@ -8,6 +8,7 @@
 #include "Kismet/KismetStringLibrary.h"
 #include "Components/StaticMeshComponent.h"
 #include "LoopoolGameInstanceC.h"
+#include "Runtime/Engine/Classes/Components/TimelineComponent.h"
 #include "Components/AudioComponent.h"
 
 // Sets default values
@@ -42,7 +43,7 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		ConstructorHelpers::FObjectFinderOptional<UCurveFloat>TimeCurve;
 
 
-		
+
 		FConstructorStatics()
 			: PoolBall(TEXT("/Game/PoolTable/Mesh/Mesh_NeonBall_00.Mesh_NeonBall_00"))
 			, PoolBallNumber1(TEXT("/Game/PoolTable/Mesh/Mesh_NeonBall_1.Mesh_NeonBall_1"))
@@ -71,8 +72,13 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 
 		}
 	};
+
+	//タイムライン
+	MyTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("TimeLine"));
+
 	static FConstructorStatics ConstructorStatics;
 
+	
 	//コンポーネントの設定
 	//ルートコンポーネント（球）
 	PoolBall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PoolBall"));
@@ -83,17 +89,26 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		TArray<FName> _Tags;
 		_Tags.Add(BallTagName);
 		PoolBall->ComponentTags = _Tags;
+
 		
+
 		//コリジョン
 		PoolBall->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
 		PoolBall->SetCollisionProfileName(TEXT("PoolBall"));
+		PoolBall->SetSimulatePhysics(true);
+		PoolBall->SetLinearDamping(0.2f);
+		PoolBall->SetAngularDamping(0.3f);
+		PoolBall->bApplyImpulseOnDamage = false;
+		PoolBall->SetNotifyRigidBodyCollision(true);//Simuration Generates Hit Events
 
 		RootComponent = PoolBall;
 
+		//Hitイベント
+		PoolBall->OnComponentHit.AddDynamic(this, &ANeonPlayerPawnBase::OnHit);
 
 
 	}
-	
+
 	//ボールとスティックを連結するSpringArm
 	SpringArmStick = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArmStick"));
 	if (SpringArmStick != nullptr)
@@ -131,6 +146,7 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		_Tags.Add(StickTagName);
 
 		//コリジョン
+		CueStick->SetNotifyRigidBodyCollision(true);//Simuration Generates Hit Events
 		CueStick->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
 		CueStick->SetCollisionProfileName(TEXT("CueStick"));
 
@@ -185,6 +201,7 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 	}
 
 	//変数RefBallMeshsにスタティックを設定する。
+	_RefBallMeshes.Add(ConstructorStatics.PoolBall.Get());
 	_RefBallMeshes.Add(ConstructorStatics.PoolBallNumber1.Get());
 	_RefBallMeshes.Add(ConstructorStatics.PoolBallNumber2.Get());
 	_RefBallMeshes.Add(ConstructorStatics.PoolBallNumber3.Get());
@@ -212,47 +229,35 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 	_NeonMatGlass = ConstructorStatics.NeonMatGlass.Get();
 
 	//タイムライン
-	_ShotTimeline = new FTimeline();
-	_ShotTimeline->SetTimelineLength(5.0f);
+	//_ShotTimeline = new FTimeline();
+	//_ShotTimeline->SetTimelineLength(5.0f);
 
 	//タイムラインで使用するカーブ
 	_MoveXCurve = ConstructorStatics.MoveXCurve.Get();
 	_TimeCurve = ConstructorStatics.TimeCurve.Get();
 
 	//タイムライン更新時呼ばれる関数の設定（このクラスのTimelineUpdate）を呼ぶ
-	FOnTimelineFloat MyTimelineUpdate;
-	MyTimelineUpdate.BindUFunction(this, "TimelineUpdate");
-	_ShotTimeline->AddInterpFloat(_MoveXCurve, MyTimelineUpdate);
-	_ShotTimeline->AddInterpFloat(_TimeCurve, MyTimelineUpdate);
+	//FOnTimelineFloat MyTimelineUpdate;
+	//MyTimelineUpdate.BindUFunction(this, "TimelineUpdate");
+	TimeLineUpdate.BindUFunction(this, FName("TimelineUpdateCallBack"));
+	TimeLineFinish.BindUFunction(this, FName("TimelineFinishCallBack"));
 
 
-	
 	//打つときの強さ関連の変数の初期化
 	//TODO:Input関連の処理を理解したらPlayerControllerに移動すること
 	_ImpluseValue = 100.0f;
 	_ImpluseMaxValue = 5.0f;
 	_ImpluseMinValue = 1.0f;
 	_ImpluseDefaultValue = 3.0f;
-	
-	//メッシュ・マテリアル・テキストを設定
-	//メッシュの設定
-	PoolBall->SetStaticMesh(_RefBallMeshes[_BallNumber]);
 
-	//マテリアルインスタンスの変更
-	PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
-	//エミッシブカラーを強くして発光させる
-	PoolBall->SetScalarParameterValueOnMaterials("Emissive_Multiply", 10.0f);
+}
 
-	//マテリアルインスタンスの変更
-	PoolBall->CreateDynamicMaterialInstance(1, _NeonMatGlass);
+// Called when the game starts or when spawned
+void ANeonPlayerPawnBase::BeginPlay()
+{
+	Super::BeginPlay();
 
-	//ガラス部分を半透明にする/
-	PoolBall->SetScalarParameterValueOnMaterials("Opacity", 0.5f);
-
-	//テキストの設定
-	NumberText->SetText(UKismetStringLibrary::Conv_IntToString(_BallNumber));
-	//Init();
-	
+	Init();
 
 }
 
@@ -276,16 +281,16 @@ void ANeonPlayerPawnBase::Init()
 	//テキストの設定
 	NumberText->SetText(UKismetStringLibrary::Conv_IntToString(_BallNumber));
 
-}
-
-// Called when the game starts or when spawned
-void ANeonPlayerPawnBase::BeginPlay()
-{
-	Super::BeginPlay();
-
+	//タイムラインの設定
 	
-
+	MyTimeline->AddInterpFloat(_MoveXCurve, TimeLineUpdate, FName("MoveX"));
+	MyTimeline->SetTimelineFinishedFunc(TimeLineFinish);
+	MyTimeline->SetLooping(false);
+	MyTimeline->SetTimelineLength(1.0f);
+		
 }
+
+
 
 // Called every frame
 void ANeonPlayerPawnBase::Tick(float DeltaTime)
@@ -293,10 +298,6 @@ void ANeonPlayerPawnBase::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	
-	if (_ShotTimeline != nullptr && _ShotTimeline->IsPlaying())
-	{
-		_ShotTimeline->TickTimeline(DeltaTime);
-	}
 }
 
 // Called to bind functionality to input
@@ -337,6 +338,7 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 
 	if (instance)
 	{
+		/*
 		//まだ打っていないなら
 		if (instance->_shot)
 		{
@@ -357,6 +359,7 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 			}
 			
 		}
+		*/
 	}
 
 }
@@ -364,9 +367,11 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 
 void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
 {
+	/*
 	//インスタンスの取得
 	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
+	UE_LOG(LogTemp, Warning, TEXT("OnHit"));
 	if (instance)
 	{
 		if ((OtherActor != nullptr) && (OtherComponent != nullptr))
@@ -374,6 +379,7 @@ void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* Other
 			if (OtherComponent->ComponentHasTag(StickTagName))
 			{
 				//打った強さ
+				
 				FVector shotStrongIsWindow = Hit.ImpactNormal * instance->_shotImpluse * 25;
 				FVector shotStrongIsStandAlone = Hit.ImpactNormal * instance->_shotImpluse * 133;
 
@@ -398,7 +404,7 @@ void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* Other
 				
 				//ボールに衝撃を与える
 				PoolBall->AddImpulse(_Impluse);
-
+			
 				//ボールの衝撃音を再生
 				UAudioComponent *shotAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallShotSound, this->GetActorLocation());
 				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal * 1.5f);
@@ -426,12 +432,15 @@ void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* Other
 			}
 		}
 	}
+	*/
 
 }
 
 //打つボールに選択されたときに処理をまとめたメソッド
 void ANeonPlayerPawnBase::ActivePawn()
 {
+	UE_LOG(LogTemp, Warning, TEXT("Active"));
+
 	//マテリアルインスタンスの変更
 	PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
 	//エミッシブカラーを強くして発光させる
@@ -463,6 +472,8 @@ void ANeonPlayerPawnBase::NonActive()
 
 	if (instance)
 	{
+
+		UE_LOG(LogTemp, Warning, TEXT("NonActive"));
 		//マテリアルインスタンスの変更
 		PoolBall->CreateDynamicMaterialInstance(0, _NeonMatEmissive);
 		//発光をデフォルト値に戻す。
@@ -473,12 +484,12 @@ void ANeonPlayerPawnBase::NonActive()
 
 		//ガラス部分を透明にする/
 		PoolBall->SetScalarParameterValueOnMaterials("Opacity", 0.0f);
-
+		
 		//コリジョンのチャンネルを変更（スティックとのあたり判定を無効にする。）
 		PoolBall->SetCollisionObjectType(ECollisionChannel::ECC_PhysicsBody);
 
 		//スティックを非表示
-		CueStick->SetVisibility(false, false);
+		CueStick->SetVisibility(false , false);
 
 		//スティックのコリジョンを無効にする。
 		CueStick->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -499,14 +510,23 @@ void ANeonPlayerPawnBase::Shot()
 	//GameInstance取得
 	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
+
+	UE_LOG(LogTemp, Warning, TEXT("Shot"));
+
 	if (instance)
 	{
 		instance->_shot = true;
 
+		/*
 		//タイムラインをスタート
 		if (_ShotTimeline != nullptr)
 		{
 			_ShotTimeline->PlayFromStart();
+		}
+		*/
+		if (MyTimeline != nullptr)
+		{
+			MyTimeline->PlayFromStart();
 		}
 	}
 
@@ -577,12 +597,20 @@ void ANeonPlayerPawnBase::ShowBallNum()
 
 }
 
-//タイムライン更新中に呼ばれるメソッド
-void ANeonPlayerPawnBase::TimelineUpdate(float MoveX, float Time)
-{
-	float X =UKismetMathLibrary::Lerp(0.0f, MoveX, Time);
-	CueStick->SetRelativeLocation(FVector(X, 0.0f, 0.0f));
 
+//タイムライン更新中に呼ばれるメソッド
+void ANeonPlayerPawnBase::TimelineUpdateCallback(float MoveX)
+{
+	CueStick->SetRelativeLocation(FVector(MoveX , 0.0f, 0.0f));
+	//GLog->Log("PLAY");
+	//GLog->Log("Move =" + UKismetStringLibrary::Conv_FloatToString(MoveX));
+}
+
+
+//タイムライン終了時に呼ばれるメソッド
+void ANeonPlayerPawnBase::TimelineFinishCallback()
+{
+	GLog->Log("FINISH");
 }
 
 

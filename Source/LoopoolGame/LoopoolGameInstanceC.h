@@ -22,8 +22,11 @@ public:
 	//•Ï”
 
 	//’e‚ğ‘Å‚Á‚½‚Æ‚«‚Ì‹­‚³
+	UPROPERTY(Category = instance, VisibleDefaultsOnly, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	float _shotImpluse;
 
+
+	UPROPERTY(Category = instance, VisibleDefaultsOnly, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	//’e‚ğŒ‚‚Á‚½‚©‚Ç‚¤‚©
 	bool _shot;
 

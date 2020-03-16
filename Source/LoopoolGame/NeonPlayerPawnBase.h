@@ -9,6 +9,8 @@
 #include "Components/TextRenderComponent.h"
 #include "Sound/SoundBase.h"
 #include "Components/TimelineComponent.h"
+#include "PoolGameModeBase.h"
+
 
 #include "NeonPlayerPawnBase.generated.h"
 
@@ -18,6 +20,7 @@ class LOOPOOLGAME_API ANeonPlayerPawnBase : public APawn
 {
 	GENERATED_BODY()
 
+	class UTimelineComponent *MyTimeline;
 
 //コンポーネント
 	UPROPERTY(Category = NeonPlayerPawn, VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
@@ -59,38 +62,47 @@ public:
 public:
 
 	//コンストラクションスクリプトで行っていた処理
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void Init();
 
 	//あたり判定
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
 
 	//スティックを回転させるメソッド
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void AxisTurnRate(float AxisValue);
 
 	//打つ強さを決めるメソッド
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void AxisPowerRate(float AxisValue);
 
 	//カスタムイベントで作成していたメソッド
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void ActivePawn();
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void NonActive();
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void Shot();
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void DrawLine();
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void BLInit();
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void ShowBallNum();
 
 	//タイムライン更新時のメソッド
-	UFUNCTION()
-	void TimelineUpdate(float MoveX , float Time);
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
+		void TimelineUpdateCallback(float MoveX);
+
+	//タイムライン更新時のメソッド
+	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
+	void TimelineFinishCallback();
+
+	//タイムラインデリゲート
+	FOnTimelineFloat TimeLineUpdate{};
+	FOnTimelineEvent TimeLineFinish{};
+
 
 
 
@@ -105,7 +117,6 @@ private:
 	//flipflop用のboolean
 	bool _ShowBallNumFlip = true;
 	
-
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
 	FString _PawnDisPlayName;
@@ -139,8 +150,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NeonPlayerPawnBase")
 	UMaterialInterface *_NeonMatGlass;
+	
 
-	FTimeline  *_ShotTimeline;
+
+	//FTimeline  *_ShotTimeline;
 
 	UCurveFloat *_MoveXCurve;
 	UCurveFloat *_TimeCurve;
