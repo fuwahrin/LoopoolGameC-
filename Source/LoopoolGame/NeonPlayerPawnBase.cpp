@@ -104,7 +104,8 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		RootComponent = PoolBall;
 
 		//Hitイベント
-		PoolBall->OnComponentHit.AddDynamic(this, &ANeonPlayerPawnBase::OnHit);
+		//PoolBall->OnComponentHit.AddDynamic(this, &ANeonPlayerPawnBase::OnCompHit);
+		//PoolBall->NotFy
 
 
 	}
@@ -338,7 +339,7 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 
 	if (instance)
 	{
-		/*
+		
 		//まだ打っていないなら
 		if (instance->_shot)
 		{
@@ -359,15 +360,15 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 			}
 			
 		}
-		*/
 	}
 
 }
 
 
-void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
-{
-	/*
+
+/*
+void ANeonPlayerPawnBase::OnCompHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
+{	
 	//インスタンスの取得
 	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
@@ -415,9 +416,6 @@ void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* Other
 				//スティックのコリジョンを消す
 				CueStick->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-
-
-
 			}
 			else if (OtherComponent->ComponentHasTag(BallTagName))
 			{
@@ -432,8 +430,73 @@ void ANeonPlayerPawnBase::OnHit(UPrimitiveComponent* HitComponent, AActor* Other
 			}
 		}
 	}
-	*/
+}
+*/
 
+void ANeonPlayerPawnBase::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Other, class UPrimitiveComponent* OtherComp, bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit)
+{
+		
+	//インスタンスの取得
+	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
+
+	UE_LOG(LogTemp, Warning, TEXT("OnHit"));
+	if (instance)
+	{
+		if ((Other != nullptr) && (OtherComp != nullptr))
+		{
+			if (OtherComp->ComponentHasTag(StickTagName))
+			{
+				//打った強さ
+
+				FVector shotStrongIsWindow = Hit.ImpactNormal * instance->_shotImpluse * 25;
+				FVector shotStrongIsStandAlone = Hit.ImpactNormal * instance->_shotImpluse * 133;
+
+
+				//打った強さのベクトルの長さ
+				float Length = UKismetMathLibrary::Vector4_Size(shotStrongIsWindow);
+
+				//スタンドアローン版と新規Windowで打つ強さに誤差が出たので調整を行う。
+				//打つ強さが最小値より上回っていれば新規Windowと判定
+				if (Length - 1.0f > _ImpluseMinValue)
+				{
+					//新規Windowで実行したときの処理
+
+					//打つ際の衝撃結果を変数に格納
+					_Impluse = FVector(shotStrongIsWindow.X, shotStrongIsStandAlone.Y, 0.0f);
+				}
+				else
+				{
+					//スタンドアローンで実行したときの処理
+					_Impluse = FVector(shotStrongIsStandAlone.X, shotStrongIsStandAlone.Y, 0.0f);
+				}
+
+				//ボールに衝撃を与える
+				PoolBall->AddImpulse(_Impluse);
+
+				//ボールの衝撃音を再生
+				UAudioComponent *shotAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallShotSound, this->GetActorLocation());
+				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal * 1.5f);
+				shotAudio->SetVolumeMultiplier(volume);
+
+				//スティックを見えなくする。
+				CueStick->SetVisibility(false, false);
+				//スティックのコリジョンを消す
+				CueStick->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+			}
+			else if (OtherComp->ComponentHasTag(BallTagName))
+			{
+				_BallToHit = true;
+				//ボールのHit音を再生
+				UAudioComponent *hitAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallHitSound, this->GetActorLocation());
+
+				//音量を変更する。
+				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal);
+				hitAudio->SetVolumeMultiplier(volume);
+
+			}
+		}
+	}
 }
 
 //打つボールに選択されたときに処理をまとめたメソッド

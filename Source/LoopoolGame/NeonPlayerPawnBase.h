@@ -59,6 +59,10 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	//ヒットイベント
+	virtual void NotifyHit(class UPrimitiveComponent* MyComp, AActor* Other, class UPrimitiveComponent* OtherComp, bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit) override;
+
+
 public:
 
 	//コンストラクションスクリプトで行っていた処理
@@ -66,8 +70,9 @@ public:
 	void Init();
 
 	//あたり判定
-	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
-	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
+	
+	//UFUNCTION()
+	//void OnCompHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
 
 	//スティックを回転させるメソッド
 	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
@@ -93,7 +98,7 @@ public:
 
 	//タイムライン更新時のメソッド
 	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
-		void TimelineUpdateCallback(float MoveX);
+	void TimelineUpdateCallback(float MoveX);
 
 	//タイムライン更新時のメソッド
 	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
