@@ -69,11 +69,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void Init();
 
-	//あたり判定
 	
-	//UFUNCTION()
-	//void OnCompHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
-
 	//スティックを回転させるメソッド
 	UFUNCTION(BlueprintCallable, Category = NeonPalayerPawn)
 	void AxisTurnRate(float AxisValue);

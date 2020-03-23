@@ -198,6 +198,7 @@ ANeonPlayerPawnBase::ANeonPlayerPawnBase()
 		NumberText->SetRelativeRotation(FQuat(Rot));
 		//テキストを見えなくする。
 		NumberText->SetVisibility(false);
+		NumberText->WorldSize = 16.0f;
 
 	}
 
@@ -364,82 +365,13 @@ void ANeonPlayerPawnBase::AxisPowerRate(float AxisValue)
 
 }
 
-
-
-/*
-void ANeonPlayerPawnBase::OnCompHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
-{	
-	//インスタンスの取得
-	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
-
-	UE_LOG(LogTemp, Warning, TEXT("OnHit"));
-	if (instance)
-	{
-		if ((OtherActor != nullptr) && (OtherComponent != nullptr))
-		{
-			if (OtherComponent->ComponentHasTag(StickTagName))
-			{
-				//打った強さ
-				
-				FVector shotStrongIsWindow = Hit.ImpactNormal * instance->_shotImpluse * 25;
-				FVector shotStrongIsStandAlone = Hit.ImpactNormal * instance->_shotImpluse * 133;
-
-
-				//打った強さのベクトルの長さ
-				float Length = UKismetMathLibrary::Vector4_Size(shotStrongIsWindow);
-				
-				//スタンドアローン版と新規Windowで打つ強さに誤差が出たので調整を行う。
-				//打つ強さが最小値より上回っていれば新規Windowと判定
-				if (Length - 1.0f > _ImpluseMinValue)
-				{
-					//新規Windowで実行したときの処理
-
-					//打つ際の衝撃結果を変数に格納
-					_Impluse = FVector(shotStrongIsWindow.X, shotStrongIsStandAlone.Y, 0.0f);
-				}
-				else
-				{
-					//スタンドアローンで実行したときの処理
-					_Impluse = FVector(shotStrongIsStandAlone.X, shotStrongIsStandAlone.Y, 0.0f);
-				}
-				
-				//ボールに衝撃を与える
-				PoolBall->AddImpulse(_Impluse);
-			
-				//ボールの衝撃音を再生
-				UAudioComponent *shotAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallShotSound, this->GetActorLocation());
-				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal * 1.5f);
-				shotAudio->SetVolumeMultiplier(volume);
-
-				//スティックを見えなくする。
-				CueStick->SetVisibility(false, false);
-				//スティックのコリジョンを消す
-				CueStick->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-			}
-			else if (OtherComponent->ComponentHasTag(BallTagName))
-			{
-				_BallToHit = true;
-				//ボールのHit音を再生
-				UAudioComponent *hitAudio = UGameplayStatics::SpawnSoundAtLocation(this, _BallHitSound, this->GetActorLocation());
-
-				//音量を変更する。
-				float volume = UKismetMathLibrary::Vector4_Size(Hit.ImpactNormal);
-				hitAudio->SetVolumeMultiplier(volume);
-
-			}
-		}
-	}
-}
-*/
-
 void ANeonPlayerPawnBase::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Other, class UPrimitiveComponent* OtherComp, bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit)
 {
 		
 	//インスタンスの取得
 	ULoopoolGameInstanceC *instance = Cast < ULoopoolGameInstanceC >(GetGameInstance());
 
-	UE_LOG(LogTemp, Warning, TEXT("OnHit"));
+	//UE_LOG(LogTemp, Warning, TEXT("OnHit"));
 	if (instance)
 	{
 		if ((Other != nullptr) && (OtherComp != nullptr))
@@ -448,29 +380,19 @@ void ANeonPlayerPawnBase::NotifyHit(class UPrimitiveComponent* MyComp, AActor* O
 			{
 				//打った強さ
 
-				FVector shotStrongIsWindow = Hit.ImpactNormal * instance->_shotImpluse * 25;
-				FVector shotStrongIsStandAlone = Hit.ImpactNormal * instance->_shotImpluse * 133;
-
-
+				FVector shotStrongIsWindow = Hit.ImpactNormal * (instance->_shotImpluse * 25);
+				
 				//打った強さのベクトルの長さ
 				float Length = UKismetMathLibrary::Vector4_Size(shotStrongIsWindow);
+				FString LengthString = UKismetStringLibrary::Conv_FloatToString(Length);
+				GLog->Log("Length =" + LengthString);
+				
+				//打つ際の衝撃結果を変数に格納
+				_Impluse = FVector(shotStrongIsWindow.X, shotStrongIsWindow.Y, 0.0f);
+				//打つ強さ確認
+				GLog->Log("Inpluse =" + _Impluse.ToString());
 
-				//スタンドアローン版と新規Windowで打つ強さに誤差が出たので調整を行う。
-				//打つ強さが最小値より上回っていれば新規Windowと判定
-				if (Length - 1.0f > _ImpluseMinValue)
-				{
-					//新規Windowで実行したときの処理
-
-					//打つ際の衝撃結果を変数に格納
-					_Impluse = FVector(shotStrongIsWindow.X, shotStrongIsStandAlone.Y, 0.0f);
-				}
-				else
-				{
-					//スタンドアローンで実行したときの処理
-					_Impluse = FVector(shotStrongIsStandAlone.X, shotStrongIsStandAlone.Y, 0.0f);
-				}
-
-				//ボールに衝撃を与える
+				//ボールに衝撃を与える //最大１1
 				PoolBall->AddImpulse(_Impluse);
 
 				//ボールの衝撃音を再生
@@ -580,13 +502,7 @@ void ANeonPlayerPawnBase::Shot()
 	{
 		instance->_shot = true;
 
-		/*
-		//タイムラインをスタート
-		if (_ShotTimeline != nullptr)
-		{
-			_ShotTimeline->PlayFromStart();
-		}
-		*/
+		
 		if (MyTimeline != nullptr)
 		{
 			MyTimeline->PlayFromStart();
